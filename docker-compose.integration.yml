@@ -1,0 +1,48 @@
+# =============================================================================
+# docker-compose.integration.yml
+# Override para habilitar comunicação AMD2 ↔ Helpdesk.
+# Use junto com o docker-compose.yml principal:
+#   docker compose -f docker-compose.yml -f docker-compose.integration.yml up -d
+#
+# OU copie os trechos abaixo para o docker-compose.yml principal.
+# =============================================================================
+
+name: infra-stack
+
+services:
+
+  # ─── Helpdesk: adiciona variáveis de integração ───────────────────────────
+  helpdesk-server:
+    environment:
+      SHARED_JWT_SECRET:    ${SHARED_JWT_SECRET}
+      AMD2_INTEGRATION_KEY: ${AMD2_INTEGRATION_KEY}
+      PUBLIC_BASE_URL:      ${PUBLIC_BASE_URL}
+    networks:
+      - helpdesk-net
+      - frontend-net
+      - integration-net   # NOVO: rede compartilhada com AMD2
+
+  # ─── AMD2 API: adiciona variáveis e acesso ao Helpdesk ───────────────────
+  amd2-api:
+    environment:
+      HELPDESK_INTERNAL_URL: ${HELPDESK_INTERNAL_URL:-http://helpdesk-server:3002}
+      AMD2_INTEGRATION_KEY:  ${AMD2_INTEGRATION_KEY}
+      AMD2_INTERNAL_TOKEN:   ${AMD2_INTERNAL_TOKEN}
+      HELPDESK_TIMEOUT_SEG:  ${HELPDESK_TIMEOUT_SEG:-10}
+    networks:
+      - amd2-net
+      - frontend-net
+      - integration-net   # NOVO: rede compartilhada com Helpdesk
+
+  # ─── Asterisk também na rede de integração (para o hook PHP chamar o AMD2 API)
+  amd2-asterisk:
+    networks:
+      - amd2-net
+      - integration-net
+
+networks:
+  # Rede dedicada à comunicação AMD2 ↔ Helpdesk
+  # Não é exposta externamente; só containers desta rede se enxergam.
+  integration-net:
+    driver: bridge
+    internal: true
